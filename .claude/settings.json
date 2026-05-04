@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(claude mcp add --help 2>&1)"
+    ]
+  }
+}
