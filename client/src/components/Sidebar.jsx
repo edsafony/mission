@@ -1,5 +1,6 @@
 export default function Sidebar({ activeSection, onSelect }) {
   const items = [
+    { id: 'mission', label: 'Mission' },
     { id: 'roles', label: 'Roles' },
     { id: 'weekly', label: 'Weekly Plan' },
   ];
