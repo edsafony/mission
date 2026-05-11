@@ -18,6 +18,7 @@ function setup(overrides = {}) {
     onUpdate: vi.fn().mockResolvedValue({}),
     onDelete: vi.fn().mockResolvedValue({}),
     onTaskAdd: vi.fn().mockResolvedValue({}),
+    onTaskUpdate: vi.fn().mockResolvedValue({}),
     onTaskDelete: vi.fn().mockResolvedValue({}),
     ...overrides,
   };
@@ -62,6 +63,18 @@ describe('GoalRow', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /add task/i }));
     expect(screen.getByPlaceholderText(/task description/i)).toBeInTheDocument();
+  });
+
+  test('shows task progress count', () => {
+    const goalWithTasks = {
+      ...goal,
+      tasks: [
+        { id: 10, goal_id: 1, text: 'Read 20 pages', completed: 1 },
+        { id: 11, goal_id: 1, text: 'Take notes', completed: 0 },
+      ],
+    };
+    setup({ goal: goalWithTasks });
+    expect(screen.getByText(/1\/2/)).toBeInTheDocument();
   });
 
   test('submitting the task form calls onTaskAdd', async () => {

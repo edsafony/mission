@@ -41,6 +41,7 @@ export default function WeeklyView() {
               onGoalUpdate={updateGoal}
               onGoalDelete={deleteGoal}
               onTaskAdd={addTask}
+              onTaskUpdate={updateTask}
               onTaskDelete={deleteTask}
             />
           ))}

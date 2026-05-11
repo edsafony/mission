@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import GoalRow from './GoalRow';
 
-export default function WeekRoleCard({ roleId, roleName, goals, weekId, onGoalAdd, onGoalUpdate, onGoalDelete, onTaskAdd, onTaskDelete }) {
+export default function WeekRoleCard({ roleId, roleName, goals, weekId, onGoalAdd, onGoalUpdate, onGoalDelete, onTaskAdd, onTaskUpdate, onTaskDelete }) {
   const [addingGoal, setAddingGoal] = useState(false);
   const [newGoalText, setNewGoalText] = useState('');
 
@@ -24,6 +24,7 @@ export default function WeekRoleCard({ roleId, roleName, goals, weekId, onGoalAd
           onUpdate={onGoalUpdate}
           onDelete={onGoalDelete}
           onTaskAdd={onTaskAdd}
+          onTaskUpdate={onTaskUpdate}
           onTaskDelete={onTaskDelete}
         />
       ))}

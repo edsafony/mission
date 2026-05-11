@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import TaskItem from './TaskItem';
 
-export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskDelete }) {
+export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskUpdate, onTaskDelete }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [addingTask, setAddingTask] = useState(false);
@@ -26,6 +26,9 @@ export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskDel
     setAddingTask(false);
   }
 
+  const completedCount = goal.tasks.filter(t => t.completed).length;
+  const totalCount = goal.tasks.length;
+
   return (
     <div className="ml-2 mb-3">
       <div className="flex items-center gap-2 mb-1">
@@ -43,6 +46,9 @@ export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskDel
         ) : (
           <>
             <span className="flex-1 text-sm font-medium text-gray-800">{goal.text}</span>
+            {totalCount > 0 && (
+              <span className="text-xs text-gray-400">{completedCount}/{totalCount}</span>
+            )}
             <button onClick={startEdit} className="text-xs text-gray-400 hover:text-blue-600">Edit</button>
             <button onClick={() => onDelete(goal.id)} className="text-xs text-gray-400 hover:text-red-500" aria-label="Delete goal">Delete</button>
           </>
@@ -51,7 +57,7 @@ export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskDel
 
       <ul className="ml-4 flex flex-col gap-0.5">
         {goal.tasks.map(task => (
-          <TaskItem key={task.id} task={task} onDelete={onTaskDelete} />
+          <TaskItem key={task.id} task={task} onUpdate={onTaskUpdate} onDelete={onTaskDelete} />
         ))}
       </ul>
 

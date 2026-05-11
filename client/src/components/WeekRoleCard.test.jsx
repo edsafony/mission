@@ -27,6 +27,7 @@ function setup(overrides = {}) {
     onGoalUpdate: vi.fn().mockResolvedValue({}),
     onGoalDelete: vi.fn().mockResolvedValue({}),
     onTaskAdd: vi.fn().mockResolvedValue({}),
+    onTaskUpdate: vi.fn().mockResolvedValue({}),
     onTaskDelete: vi.fn().mockResolvedValue({}),
     ...overrides,
   };
