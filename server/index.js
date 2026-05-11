@@ -10,6 +10,8 @@ app.use('/api', require('./routes/health'));
 app.use('/api/mission', require('./routes/mission'));
 app.use('/api/roles', require('./routes/roles'));
 app.use('/api/weeks', require('./routes/weeks'));
+app.use('/api/goals', require('./routes/goals'));
+app.use('/api/tasks', require('./routes/tasks'));
 
 module.exports = app;
 

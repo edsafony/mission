@@ -13,6 +13,7 @@ const app = require('../index');
 
 beforeEach(() => {
   db.exec('DELETE FROM weeks');
+  db.exec('DELETE FROM roles');
 });
 
 describe('GET /api/weeks', () => {
@@ -56,17 +57,32 @@ describe('POST /api/weeks', () => {
 });
 
 describe('GET /api/weeks/:id', () => {
-  let weekId;
+  let weekId, roleId;
 
   beforeEach(() => {
     const result = db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run('2025-05-05');
     weekId = result.lastInsertRowid;
+    const r = db.prepare('INSERT INTO roles (name) VALUES (?)').run('Father');
+    roleId = r.lastInsertRowid;
   });
 
-  test('returns the week by id', async () => {
+  test('returns the week by id with empty goals array', async () => {
     const res = await request(app).get(`/api/weeks/${weekId}`);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: weekId, start_date: '2025-05-05' });
+    expect(res.body.goals).toEqual([]);
+  });
+
+  test('returns nested goals with role_name and tasks', async () => {
+    const g = db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(weekId, roleId, 'Read daily');
+    db.prepare('INSERT INTO tasks (goal_id, text) VALUES (?, ?)').run(g.lastInsertRowid, 'Read 20 pages');
+
+    const res = await request(app).get(`/api/weeks/${weekId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.goals).toHaveLength(1);
+    expect(res.body.goals[0]).toMatchObject({ text: 'Read daily', role_name: 'Father' });
+    expect(res.body.goals[0].tasks).toHaveLength(1);
+    expect(res.body.goals[0].tasks[0]).toMatchObject({ text: 'Read 20 pages', completed: 0 });
   });
 
   test('returns 404 for non-existent week', async () => {
