@@ -9,6 +9,7 @@ app.use(express.json());
 app.use('/api', require('./routes/health'));
 app.use('/api/mission', require('./routes/mission'));
 app.use('/api/roles', require('./routes/roles'));
+app.use('/api/weeks', require('./routes/weeks'));
 
 module.exports = app;
 
