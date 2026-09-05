@@ -1,42 +1,44 @@
 const router = require('express').Router();
 const db = require('../db');
+const asyncHandler = require('../lib/asyncHandler');
 
-router.get('/', (req, res) => {
-  const weeks = db.prepare('SELECT * FROM weeks ORDER BY start_date').all();
-  res.json(weeks);
-});
+router.get('/', asyncHandler(async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM weeks ORDER BY start_date');
+  res.json(rows);
+}));
 
-router.post('/', (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { start_date } = req.body;
   if (!start_date || start_date.trim() === '') {
     return res.status(400).json({ error: 'start_date is required' });
   }
-  const existing = db.prepare('SELECT * FROM weeks WHERE start_date = ?').get(start_date.trim());
-  if (existing) return res.status(409).json(existing);
+  const trimmed = start_date.trim();
+  const { rows: existingRows } = await db.query('SELECT * FROM weeks WHERE start_date = $1', [trimmed]);
+  if (existingRows[0]) return res.status(409).json(existingRows[0]);
 
-  const result = db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run(start_date.trim());
-  const week = db.prepare('SELECT * FROM weeks WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(week);
-});
+  const { rows } = await db.query('INSERT INTO weeks (start_date) VALUES ($1) RETURNING *', [trimmed]);
+  res.status(201).json(rows[0]);
+}));
 
-router.get('/:id', (req, res) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const week = db.prepare('SELECT * FROM weeks WHERE id = ?').get(id);
+  const { rows: weekRows } = await db.query('SELECT * FROM weeks WHERE id = $1', [id]);
+  const week = weekRows[0];
   if (!week) return res.status(404).json({ error: 'Week not found' });
 
-  const goals = db.prepare(`
+  const { rows: goals } = await db.query(`
     SELECT g.*, r.name AS role_name
     FROM goals g JOIN roles r ON r.id = g.role_id
-    WHERE g.week_id = ?
+    WHERE g.week_id = $1
     ORDER BY g.id
-  `).all(id);
+  `, [id]);
 
-  const tasks = db.prepare(`
+  const { rows: tasks } = await db.query(`
     SELECT t.* FROM tasks t
     JOIN goals g ON g.id = t.goal_id
-    WHERE g.week_id = ?
+    WHERE g.week_id = $1
     ORDER BY t.id
-  `).all(id);
+  `, [id]);
 
   const tasksByGoalId = {};
   for (const task of tasks) {
@@ -48,6 +50,6 @@ router.get('/:id', (req, res) => {
     ...week,
     goals: goals.map(g => ({ ...g, tasks: tasksByGoalId[g.id] ?? [] })),
   });
-});
+}));
 
 module.exports = router;

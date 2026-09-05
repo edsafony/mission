@@ -1,41 +1,45 @@
 const router = require('express').Router();
 const db = require('../db');
+const asyncHandler = require('../lib/asyncHandler');
 
-router.get('/', (req, res) => {
-  const roles = db.prepare('SELECT * FROM roles ORDER BY id').all();
-  res.json(roles);
-});
+router.get('/', asyncHandler(async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM roles ORDER BY id');
+  res.json(rows);
+}));
 
-router.post('/', (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { name, description = null } = req.body;
   if (!name || name.trim() === '') {
     return res.status(400).json({ error: 'name is required' });
   }
-  const result = db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)').run(name.trim(), description);
-  const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(role);
-});
+  const { rows } = await db.query(
+    'INSERT INTO roles (name, description) VALUES ($1, $2) RETURNING *',
+    [name.trim(), description]
+  );
+  res.status(201).json(rows[0]);
+}));
 
-router.put('/:id', (req, res) => {
+router.put('/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const existing = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
+  const { rows: existingRows } = await db.query('SELECT * FROM roles WHERE id = $1', [id]);
+  const existing = existingRows[0];
   if (!existing) return res.status(404).json({ error: 'Role not found' });
 
   const name = req.body.name !== undefined ? req.body.name : existing.name;
   const description = req.body.description !== undefined ? req.body.description : existing.description;
 
-  db.prepare('UPDATE roles SET name = ?, description = ? WHERE id = ?').run(name, description, id);
-  const updated = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
-  res.json(updated);
-});
+  const { rows } = await db.query(
+    'UPDATE roles SET name = $1, description = $2 WHERE id = $3 RETURNING *',
+    [name, description, id]
+  );
+  res.json(rows[0]);
+}));
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const existing = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
-  if (!existing) return res.status(404).json({ error: 'Role not found' });
-
-  db.prepare('DELETE FROM roles WHERE id = ?').run(id);
+  const { rows } = await db.query('DELETE FROM roles WHERE id = $1 RETURNING *', [id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Role not found' });
   res.json({ deleted: true });
-});
+}));
 
 module.exports = router;

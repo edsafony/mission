@@ -1,18 +1,9 @@
-jest.mock('../db', () => {
-  const Database = require('better-sqlite3');
-  const migrate = require('../db/migrate');
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  migrate(db);
-  return db;
-});
-
 const db = require('../db');
 const request = require('supertest');
 const app = require('../index');
 
-beforeEach(() => {
-  db.exec('DELETE FROM mission');
+beforeEach(async () => {
+  await db.query('TRUNCATE mission RESTART IDENTITY CASCADE');
 });
 
 describe('GET /api/mission', () => {
@@ -23,7 +14,7 @@ describe('GET /api/mission', () => {
   });
 
   test('returns mission text after it has been set', async () => {
-    db.prepare('INSERT INTO mission (id, text) VALUES (1, ?)').run('My mission statement');
+    await db.query('INSERT INTO mission (id, text) VALUES (1, $1)', ['My mission statement']);
     const res = await request(app).get('/api/mission');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ text: 'My mission statement' });
@@ -38,14 +29,14 @@ describe('PUT /api/mission', () => {
   });
 
   test('updates existing mission text', async () => {
-    db.prepare('INSERT INTO mission (id, text) VALUES (1, ?)').run('Old mission');
+    await db.query('INSERT INTO mission (id, text) VALUES (1, $1)', ['Old mission']);
     const res = await request(app).put('/api/mission').send({ text: 'New mission' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ text: 'New mission' });
   });
 
   test('allows setting text to empty string', async () => {
-    db.prepare('INSERT INTO mission (id, text) VALUES (1, ?)').run('Old mission');
+    await db.query('INSERT INTO mission (id, text) VALUES (1, $1)', ['Old mission']);
     const res = await request(app).put('/api/mission').send({ text: '' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ text: '' });

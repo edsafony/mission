@@ -1,40 +1,43 @@
-const Database = require('better-sqlite3');
-const migrate = require('../db/migrate');
+const db = require('../db');
 
-let db;
-
-function insertRole(name = 'Test Role') {
-  return db.prepare('INSERT INTO roles (name) VALUES (?)').run(name).lastInsertRowid;
+async function clearTables() {
+  await db.query('TRUNCATE mission, roles, weeks, goals, tasks RESTART IDENTITY CASCADE');
 }
 
-function insertWeek(startDate = '2026-01-06') {
-  return db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run(startDate).lastInsertRowid;
+async function insertRole(name = 'Test Role') {
+  const { rows } = await db.query('INSERT INTO roles (name) VALUES ($1) RETURNING id', [name]);
+  return rows[0].id;
 }
 
-function insertGoal(weekId, roleId, text = 'Goal') {
-  return db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(weekId, roleId, text).lastInsertRowid;
+async function insertWeek(startDate = '2026-01-06') {
+  const { rows } = await db.query('INSERT INTO weeks (start_date) VALUES ($1) RETURNING id', [startDate]);
+  return rows[0].id;
 }
 
-function insertTask(goalId, text = 'Task') {
-  return db.prepare('INSERT INTO tasks (goal_id, text) VALUES (?, ?)').run(goalId, text).lastInsertRowid;
+async function insertGoal(weekId, roleId, text = 'Goal') {
+  const { rows } = await db.query(
+    'INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3) RETURNING id',
+    [weekId, roleId, text]
+  );
+  return rows[0].id;
 }
 
-beforeEach(() => {
-  db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  migrate(db);
-});
+async function insertTask(goalId, text = 'Task') {
+  const { rows } = await db.query('INSERT INTO tasks (goal_id, text) VALUES ($1, $2) RETURNING id', [goalId, text]);
+  return rows[0].id;
+}
 
-afterEach(() => {
-  db.close();
+beforeEach(async () => {
+  await clearTables();
 });
 
 describe('table existence', () => {
-  test('all 5 tables are created', () => {
-    const tables = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .all()
-      .map(r => r.name);
+  test('all 5 tables are created', async () => {
+    const { rows } = await db.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' ORDER BY table_name
+    `);
+    const tables = rows.map(r => r.table_name);
 
     expect(tables).toEqual(expect.arrayContaining(['goals', 'mission', 'roles', 'tasks', 'weeks']));
     expect(tables).toHaveLength(5);
@@ -42,123 +45,113 @@ describe('table existence', () => {
 });
 
 describe('mission table', () => {
-  test('text column defaults to empty string', () => {
-    db.prepare('INSERT INTO mission (id) VALUES (1)').run();
-    const row = db.prepare('SELECT text FROM mission WHERE id = 1').get();
-    expect(row.text).toBe('');
+  test('text column defaults to empty string', async () => {
+    await db.query('INSERT INTO mission (id) VALUES (1)');
+    const { rows } = await db.query('SELECT text FROM mission WHERE id = 1');
+    expect(rows[0].text).toBe('');
   });
 
-  test('inserting id=1 succeeds', () => {
-    expect(() => {
-      db.prepare("INSERT INTO mission (id, text) VALUES (1, 'hello')").run();
-    }).not.toThrow();
+  test('inserting id=1 succeeds', async () => {
+    await expect(db.query("INSERT INTO mission (id, text) VALUES (1, 'hello')")).resolves.toBeDefined();
   });
 
-  test('inserting id=2 throws CHECK constraint violation', () => {
-    expect(() => {
-      db.prepare("INSERT INTO mission (id, text) VALUES (2, 'boom')").run();
-    }).toThrow();
+  test('inserting id=2 throws CHECK constraint violation', async () => {
+    await expect(db.query("INSERT INTO mission (id, text) VALUES (2, 'boom')")).rejects.toThrow();
   });
 
-  test('inserting id=1 twice throws UNIQUE violation', () => {
-    db.prepare("INSERT INTO mission (id, text) VALUES (1, 'first')").run();
-    expect(() => {
-      db.prepare("INSERT INTO mission (id, text) VALUES (1, 'second')").run();
-    }).toThrow();
+  test('inserting id=1 twice throws UNIQUE violation', async () => {
+    await db.query("INSERT INTO mission (id, text) VALUES (1, 'first')");
+    await expect(db.query("INSERT INTO mission (id, text) VALUES (1, 'second')")).rejects.toThrow();
   });
 });
 
 describe('tasks defaults and constraints', () => {
-  test('completed defaults to 0', () => {
-    const weekId = insertWeek();
-    const roleId = insertRole();
-    const goalId = insertGoal(weekId, roleId);
-    const taskId = insertTask(goalId);
+  test('completed defaults to 0', async () => {
+    const weekId = await insertWeek();
+    const roleId = await insertRole();
+    const goalId = await insertGoal(weekId, roleId);
+    const taskId = await insertTask(goalId);
 
-    const row = db.prepare('SELECT completed FROM tasks WHERE id = ?').get(taskId);
-    expect(row.completed).toBe(0);
+    const { rows } = await db.query('SELECT completed FROM tasks WHERE id = $1', [taskId]);
+    expect(rows[0].completed).toBe(0);
   });
 
-  test('completed is NOT NULL', () => {
-    const cols = db.prepare('PRAGMA table_info(tasks)').all();
-    const completedCol = cols.find(c => c.name === 'completed');
-    expect(completedCol.notnull).toBe(1);
+  test('completed is NOT NULL', async () => {
+    const { rows } = await db.query(`
+      SELECT is_nullable FROM information_schema.columns
+      WHERE table_name = 'tasks' AND column_name = 'completed'
+    `);
+    expect(rows[0].is_nullable).toBe('NO');
   });
 });
 
 describe('NOT NULL constraints', () => {
-  test('roles.name rejects null', () => {
-    expect(() => {
-      db.prepare('INSERT INTO roles (name) VALUES (?)').run(null);
-    }).toThrow();
+  test('roles.name rejects null', async () => {
+    await expect(db.query('INSERT INTO roles (name) VALUES ($1)', [null])).rejects.toThrow();
   });
 
-  test('goals.week_id rejects null', () => {
-    const roleId = insertRole();
-    expect(() => {
-      db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(null, roleId, 'Goal');
-    }).toThrow();
+  test('goals.week_id rejects null', async () => {
+    const roleId = await insertRole();
+    await expect(
+      db.query('INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3)', [null, roleId, 'Goal'])
+    ).rejects.toThrow();
   });
 
-  test('goals.role_id rejects null', () => {
-    const weekId = insertWeek();
-    expect(() => {
-      db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(weekId, null, 'Goal');
-    }).toThrow();
+  test('goals.role_id rejects null', async () => {
+    const weekId = await insertWeek();
+    await expect(
+      db.query('INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3)', [weekId, null, 'Goal'])
+    ).rejects.toThrow();
   });
 
-  test('tasks.text rejects null', () => {
-    const weekId = insertWeek();
-    const roleId = insertRole();
-    const goalId = insertGoal(weekId, roleId);
-    expect(() => {
-      db.prepare('INSERT INTO tasks (goal_id, text) VALUES (?, ?)').run(goalId, null);
-    }).toThrow();
+  test('tasks.text rejects null', async () => {
+    const weekId = await insertWeek();
+    const roleId = await insertRole();
+    const goalId = await insertGoal(weekId, roleId);
+    await expect(db.query('INSERT INTO tasks (goal_id, text) VALUES ($1, $2)', [goalId, null])).rejects.toThrow();
   });
 });
 
 describe('UNIQUE constraints', () => {
-  test('weeks.start_date rejects duplicate dates', () => {
-    insertWeek('2026-01-06');
-    expect(() => {
-      insertWeek('2026-01-06');
-    }).toThrow();
+  test('weeks.start_date rejects duplicate dates', async () => {
+    await insertWeek('2026-01-06');
+    await expect(insertWeek('2026-01-06')).rejects.toThrow();
   });
 });
 
 describe('ON DELETE CASCADE', () => {
-  test('deleting a week removes its goals', () => {
-    const weekId = insertWeek();
-    const roleId = insertRole();
-    insertGoal(weekId, roleId);
+  test('deleting a week removes its goals', async () => {
+    const weekId = await insertWeek();
+    const roleId = await insertRole();
+    await insertGoal(weekId, roleId);
 
-    db.prepare('DELETE FROM weeks WHERE id = ?').run(weekId);
+    await db.query('DELETE FROM weeks WHERE id = $1', [weekId]);
 
-    const goals = db.prepare('SELECT * FROM goals WHERE week_id = ?').all(weekId);
-    expect(goals).toHaveLength(0);
+    const { rows } = await db.query('SELECT * FROM goals WHERE week_id = $1', [weekId]);
+    expect(rows).toHaveLength(0);
   });
 
-  test('deleting a goal removes its tasks', () => {
-    const weekId = insertWeek();
-    const roleId = insertRole();
-    const goalId = insertGoal(weekId, roleId);
-    insertTask(goalId);
+  test('deleting a goal removes its tasks', async () => {
+    const weekId = await insertWeek();
+    const roleId = await insertRole();
+    const goalId = await insertGoal(weekId, roleId);
+    await insertTask(goalId);
 
-    db.prepare('DELETE FROM goals WHERE id = ?').run(goalId);
+    await db.query('DELETE FROM goals WHERE id = $1', [goalId]);
 
-    const tasks = db.prepare('SELECT * FROM tasks WHERE goal_id = ?').all(goalId);
-    expect(tasks).toHaveLength(0);
+    const { rows } = await db.query('SELECT * FROM tasks WHERE goal_id = $1', [goalId]);
+    expect(rows).toHaveLength(0);
   });
 
-  test('deleting a week cascades all the way to tasks', () => {
-    const weekId = insertWeek();
-    const roleId = insertRole();
-    const goalId = insertGoal(weekId, roleId);
-    insertTask(goalId);
+  test('deleting a week cascades all the way to tasks', async () => {
+    const weekId = await insertWeek();
+    const roleId = await insertRole();
+    const goalId = await insertGoal(weekId, roleId);
+    await insertTask(goalId);
 
-    db.prepare('DELETE FROM weeks WHERE id = ?').run(weekId);
+    await db.query('DELETE FROM weeks WHERE id = $1', [weekId]);
 
-    const tasks = db.prepare('SELECT * FROM tasks').all();
-    expect(tasks).toHaveLength(0);
+    const { rows } = await db.query('SELECT * FROM tasks');
+    expect(rows).toHaveLength(0);
   });
 });

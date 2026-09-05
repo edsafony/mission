@@ -1,16 +1,13 @@
-const Database = require('better-sqlite3');
-const fs = require('fs');
-const path = require('path');
-const migrate = require('./migrate');
+const { Pool } = require('pg');
 
-const dataDir = path.join(__dirname, '..', 'data');
-fs.mkdirSync(dataDir, { recursive: true });
+const isNeon = (process.env.DATABASE_URL || '').includes('neon.tech');
 
-const db = new Database(path.join(dataDir, 'mission.db'));
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: isNeon ? { rejectUnauthorized: false } : false,
+});
 
-db.pragma('foreign_keys = ON');
-db.pragma('journal_mode = WAL');
-
-migrate(db);
-
-module.exports = db;
+module.exports = {
+  query: (text, params) => pool.query(text, params),
+  pool,
+};

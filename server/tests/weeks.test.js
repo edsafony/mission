@@ -1,19 +1,9 @@
-jest.mock('../db', () => {
-  const Database = require('better-sqlite3');
-  const migrate = require('../db/migrate');
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  migrate(db);
-  return db;
-});
-
 const db = require('../db');
 const request = require('supertest');
 const app = require('../index');
 
-beforeEach(() => {
-  db.exec('DELETE FROM weeks');
-  db.exec('DELETE FROM roles');
+beforeEach(async () => {
+  await db.query('TRUNCATE weeks, roles RESTART IDENTITY CASCADE');
 });
 
 describe('GET /api/weeks', () => {
@@ -24,8 +14,8 @@ describe('GET /api/weeks', () => {
   });
 
   test('returns all weeks ordered by start_date', async () => {
-    db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run('2025-05-12');
-    db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run('2025-05-05');
+    await db.query('INSERT INTO weeks (start_date) VALUES ($1)', ['2025-05-12']);
+    await db.query('INSERT INTO weeks (start_date) VALUES ($1)', ['2025-05-05']);
 
     const res = await request(app).get('/api/weeks');
     expect(res.status).toBe(200);
@@ -59,11 +49,11 @@ describe('POST /api/weeks', () => {
 describe('GET /api/weeks/:id', () => {
   let weekId, roleId;
 
-  beforeEach(() => {
-    const result = db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run('2025-05-05');
-    weekId = result.lastInsertRowid;
-    const r = db.prepare('INSERT INTO roles (name) VALUES (?)').run('Father');
-    roleId = r.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows: weekRows } = await db.query('INSERT INTO weeks (start_date) VALUES ($1) RETURNING id', ['2025-05-05']);
+    weekId = weekRows[0].id;
+    const { rows: roleRows } = await db.query('INSERT INTO roles (name) VALUES ($1) RETURNING id', ['Father']);
+    roleId = roleRows[0].id;
   });
 
   test('returns the week by id with empty goals array', async () => {
@@ -74,8 +64,11 @@ describe('GET /api/weeks/:id', () => {
   });
 
   test('returns nested goals with role_name and tasks', async () => {
-    const g = db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(weekId, roleId, 'Read daily');
-    db.prepare('INSERT INTO tasks (goal_id, text) VALUES (?, ?)').run(g.lastInsertRowid, 'Read 20 pages');
+    const { rows: goalRows } = await db.query(
+      'INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3) RETURNING id',
+      [weekId, roleId, 'Read daily']
+    );
+    await db.query('INSERT INTO tasks (goal_id, text) VALUES ($1, $2)', [goalRows[0].id, 'Read 20 pages']);
 
     const res = await request(app).get(`/api/weeks/${weekId}`);
     expect(res.status).toBe(200);

@@ -1,26 +1,15 @@
-jest.mock('../db', () => {
-  const Database = require('better-sqlite3');
-  const migrate = require('../db/migrate');
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  migrate(db);
-  return db;
-});
-
 const db = require('../db');
 const request = require('supertest');
 const app = require('../index');
 
 let weekId, roleId;
 
-beforeEach(() => {
-  db.exec('DELETE FROM goals');
-  db.exec('DELETE FROM weeks');
-  db.exec('DELETE FROM roles');
-  const w = db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run('2025-05-05');
-  weekId = w.lastInsertRowid;
-  const r = db.prepare('INSERT INTO roles (name) VALUES (?)').run('Father');
-  roleId = r.lastInsertRowid;
+beforeEach(async () => {
+  await db.query('TRUNCATE goals, weeks, roles RESTART IDENTITY CASCADE');
+  const { rows: weekRows } = await db.query('INSERT INTO weeks (start_date) VALUES ($1) RETURNING id', ['2025-05-05']);
+  weekId = weekRows[0].id;
+  const { rows: roleRows } = await db.query('INSERT INTO roles (name) VALUES ($1) RETURNING id', ['Father']);
+  roleId = roleRows[0].id;
 });
 
 describe('POST /api/goals', () => {
@@ -58,9 +47,12 @@ describe('POST /api/goals', () => {
 describe('PUT /api/goals/:id', () => {
   let goalId;
 
-  beforeEach(() => {
-    const g = db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(weekId, roleId, 'Read daily');
-    goalId = g.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows } = await db.query(
+      'INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3) RETURNING id',
+      [weekId, roleId, 'Read daily']
+    );
+    goalId = rows[0].id;
   });
 
   test('updates goal text and returns the updated goal', async () => {
@@ -78,9 +70,12 @@ describe('PUT /api/goals/:id', () => {
 describe('DELETE /api/goals/:id', () => {
   let goalId;
 
-  beforeEach(() => {
-    const g = db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(weekId, roleId, 'Read daily');
-    goalId = g.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows } = await db.query(
+      'INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3) RETURNING id',
+      [weekId, roleId, 'Read daily']
+    );
+    goalId = rows[0].id;
   });
 
   test('deletes the goal and returns { deleted: true }', async () => {

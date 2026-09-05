@@ -1,29 +1,18 @@
-jest.mock('../db', () => {
-  const Database = require('better-sqlite3');
-  const migrate = require('../db/migrate');
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  migrate(db);
-  return db;
-});
-
 const db = require('../db');
 const request = require('supertest');
 const app = require('../index');
 
 let goalId;
 
-beforeEach(() => {
-  db.exec('DELETE FROM tasks');
-  db.exec('DELETE FROM goals');
-  db.exec('DELETE FROM weeks');
-  db.exec('DELETE FROM roles');
-  const w = db.prepare('INSERT INTO weeks (start_date) VALUES (?)').run('2025-05-05');
-  const r = db.prepare('INSERT INTO roles (name) VALUES (?)').run('Father');
-  const g = db.prepare('INSERT INTO goals (week_id, role_id, text) VALUES (?, ?, ?)').run(
-    w.lastInsertRowid, r.lastInsertRowid, 'Read daily'
+beforeEach(async () => {
+  await db.query('TRUNCATE tasks, goals, weeks, roles RESTART IDENTITY CASCADE');
+  const { rows: weekRows } = await db.query('INSERT INTO weeks (start_date) VALUES ($1) RETURNING id', ['2025-05-05']);
+  const { rows: roleRows } = await db.query('INSERT INTO roles (name) VALUES ($1) RETURNING id', ['Father']);
+  const { rows: goalRows } = await db.query(
+    'INSERT INTO goals (week_id, role_id, text) VALUES ($1, $2, $3) RETURNING id',
+    [weekRows[0].id, roleRows[0].id, 'Read daily']
   );
-  goalId = g.lastInsertRowid;
+  goalId = goalRows[0].id;
 });
 
 describe('POST /api/tasks', () => {
@@ -48,9 +37,12 @@ describe('POST /api/tasks', () => {
 describe('PUT /api/tasks/:id', () => {
   let taskId;
 
-  beforeEach(() => {
-    const t = db.prepare('INSERT INTO tasks (goal_id, text, completed) VALUES (?, ?, 0)').run(goalId, 'Read 20 pages');
-    taskId = t.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows } = await db.query(
+      'INSERT INTO tasks (goal_id, text, completed) VALUES ($1, $2, 0) RETURNING id',
+      [goalId, 'Read 20 pages']
+    );
+    taskId = rows[0].id;
   });
 
   test('updates task text', async () => {
@@ -66,7 +58,7 @@ describe('PUT /api/tasks/:id', () => {
   });
 
   test('toggles completed back to false', async () => {
-    db.prepare('UPDATE tasks SET completed = 1 WHERE id = ?').run(taskId);
+    await db.query('UPDATE tasks SET completed = 1 WHERE id = $1', [taskId]);
     const res = await request(app).put(`/api/tasks/${taskId}`).send({ completed: false });
     expect(res.status).toBe(200);
     expect(res.body.completed).toBe(0);
@@ -81,9 +73,12 @@ describe('PUT /api/tasks/:id', () => {
 describe('DELETE /api/tasks/:id', () => {
   let taskId;
 
-  beforeEach(() => {
-    const t = db.prepare('INSERT INTO tasks (goal_id, text, completed) VALUES (?, ?, 0)').run(goalId, 'Read 20 pages');
-    taskId = t.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows } = await db.query(
+      'INSERT INTO tasks (goal_id, text, completed) VALUES ($1, $2, 0) RETURNING id',
+      [goalId, 'Read 20 pages']
+    );
+    taskId = rows[0].id;
   });
 
   test('deletes the task and returns { deleted: true }', async () => {

@@ -1,18 +1,9 @@
-jest.mock('../db', () => {
-  const Database = require('better-sqlite3');
-  const migrate = require('../db/migrate');
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  migrate(db);
-  return db;
-});
-
 const db = require('../db');
 const request = require('supertest');
 const app = require('../index');
 
-beforeEach(() => {
-  db.exec('DELETE FROM roles');
+beforeEach(async () => {
+  await db.query('TRUNCATE roles RESTART IDENTITY CASCADE');
 });
 
 describe('GET /api/roles', () => {
@@ -23,8 +14,8 @@ describe('GET /api/roles', () => {
   });
 
   test('returns all roles ordered by id', async () => {
-    db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)').run('Father', 'Family');
-    db.prepare('INSERT INTO roles (name) VALUES (?)').run('Professional');
+    await db.query('INSERT INTO roles (name, description) VALUES ($1, $2)', ['Father', 'Family']);
+    await db.query('INSERT INTO roles (name) VALUES ($1)', ['Professional']);
 
     const res = await request(app).get('/api/roles');
     expect(res.status).toBe(200);
@@ -64,9 +55,12 @@ describe('POST /api/roles', () => {
 describe('PUT /api/roles/:id', () => {
   let roleId;
 
-  beforeEach(() => {
-    const result = db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)').run('Father', 'Family');
-    roleId = result.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows } = await db.query(
+      'INSERT INTO roles (name, description) VALUES ($1, $2) RETURNING id',
+      ['Father', 'Family']
+    );
+    roleId = rows[0].id;
   });
 
   test('updates the name', async () => {
@@ -92,9 +86,9 @@ describe('PUT /api/roles/:id', () => {
 describe('DELETE /api/roles/:id', () => {
   let roleId;
 
-  beforeEach(() => {
-    const result = db.prepare('INSERT INTO roles (name) VALUES (?)').run('Father');
-    roleId = result.lastInsertRowid;
+  beforeEach(async () => {
+    const { rows } = await db.query('INSERT INTO roles (name) VALUES ($1) RETURNING id', ['Father']);
+    roleId = rows[0].id;
   });
 
   test('deletes the role and returns { deleted: true }', async () => {

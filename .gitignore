@@ -1,5 +1,5 @@
 node_modules/
-server/data/
 dist/
 .env
 .claude/settings.local.json
+mcp-server/*.log
