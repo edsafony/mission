@@ -53,7 +53,7 @@ export default function RoleCard({ role, onUpdate, onDelete }) {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
       <div>
         <p className="font-medium text-gray-900">{role.name}</p>
         {role.description && (

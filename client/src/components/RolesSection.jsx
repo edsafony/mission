@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import useRoles from '../hooks/useRoles';
 import RoleCard from './RoleCard';
 
@@ -6,6 +6,7 @@ export default function RolesSection() {
   const { roles, add, update, remove } = useRoles();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const nameInputRef = useRef(null);
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -13,6 +14,7 @@ export default function RolesSection() {
     await add(name.trim(), description.trim());
     setName('');
     setDescription('');
+    nameInputRef.current?.focus();
   }
 
   return (
@@ -34,8 +36,9 @@ export default function RolesSection() {
         </div>
       )}
 
-      <form onSubmit={handleAdd} className="flex gap-2 mt-2">
+      <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-2 mt-2">
         <input
+          ref={nameInputRef}
           className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm"
           placeholder="Role name"
           value={name}
@@ -49,7 +52,7 @@ export default function RolesSection() {
         />
         <button
           type="submit"
-          className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+          className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 w-full sm:w-auto"
         >
           Add
         </button>

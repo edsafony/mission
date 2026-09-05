@@ -30,7 +30,7 @@ export default function WeekRoleCard({ roleId, roleName, goals, weekId, onGoalAd
       ))}
 
       {addingGoal ? (
-        <form onSubmit={handleAddGoal} className="flex gap-2 mt-1">
+        <form onSubmit={handleAddGoal} className="flex flex-wrap gap-2 mt-1">
           <input
             className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
             placeholder="Goal description"

@@ -31,7 +31,7 @@ export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskUpd
 
   return (
     <div className="ml-2 mb-3">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex flex-wrap items-center gap-2 mb-1">
         {editing ? (
           <>
             <input
@@ -62,7 +62,7 @@ export default function GoalRow({ goal, onUpdate, onDelete, onTaskAdd, onTaskUpd
       </ul>
 
       {addingTask ? (
-        <form onSubmit={handleAddTask} className="flex gap-2 ml-4 mt-1">
+        <form onSubmit={handleAddTask} className="flex flex-wrap gap-2 ml-4 mt-1">
           <input
             className="flex-1 border border-gray-300 rounded px-2 py-0.5 text-sm"
             placeholder="Task description"
